@@ -14,6 +14,6 @@ func main() {
 	}
 
 	for _, lemma := range lemmas {
-		fmt.Println("Lemmatized:", lemma.Lemma)
+		fmt.Println(lemma)
 	}
 }

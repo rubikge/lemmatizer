@@ -1,27 +1,73 @@
 package mystem
 
 import (
+	"bufio"
 	"encoding/json"
 	"os/exec"
 	"strings"
 )
 
-type LemmaResponse struct {
-	Lemma string `json:"lemma"`
+type Analysis struct {
+	Lex string `json:"lex"`
+	Gr  string `json:"gr"`
 }
 
-func Lemmatize(text string) ([]LemmaResponse, error) {
-	cmd := exec.Command("./mystem/mystem", "-l", "-n", "--json")
+type AnalizedWord struct {
+	Analysis []Analysis `json:"analysis"`
+	Text     string     `json:"text"`
+}
+
+func Lemmatize(text string) ([]string, error) {
+	cmd := exec.Command("./mystem/mystem", "-dnig", "--format", "json")
 	cmd.Stdin = strings.NewReader(text)
-	out, err := cmd.Output()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 
-	var lemmas []LemmaResponse
-	err = json.Unmarshal(out, &lemmas)
-	if err != nil {
+	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+
+	needePrefixes := []string{"A", "ADV", "COM", "S", "V"}
+	var lemmas []string
+
+	scanner := bufio.NewScanner(stdout)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) == 0 {
+			continue
+		}
+
+		var word AnalizedWord
+		if err := json.Unmarshal([]byte(line), &word); err != nil {
+			continue
+		}
+
+		if len(word.Analysis) == 0 {
+			continue
+		}
+
+		analysis := word.Analysis[0]
+
+		for _, prefix := range needePrefixes {
+			if strings.HasPrefix(analysis.Gr, prefix+"=") ||
+				strings.HasPrefix(analysis.Gr, prefix+",") {
+				lemmas = append(lemmas, analysis.Lex)
+				break
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return nil, err
+	}
+
 	return lemmas, nil
 }
