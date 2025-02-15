@@ -25,5 +25,7 @@ func main() {
 		return
 	}
 
-	fmt.Println(lemmas)
+	for _, lemma := range lemmas {
+		fmt.Println(lemma)
+	}
 }

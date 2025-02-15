@@ -22,11 +22,11 @@ func (s *LemmatizerService) ProcessData(text string) ([]string, error) {
 		return nil, err
 	}
 
-	var lemmas []string
+	lemmasSet := make(map[string]struct{})
 
 	for word := range wordStream {
 		if len(word.Analysis) == 0 {
-			lemmas = append(lemmas, word.Text)
+			lemmasSet[word.Text] = struct{}{}
 			continue
 		}
 
@@ -35,8 +35,13 @@ func (s *LemmatizerService) ProcessData(text string) ([]string, error) {
 		if slices.ContainsFunc(mystem.NeededPrefixes, func(prefix string) bool {
 			return strings.HasPrefix(analysis.Gr, prefix+"=") || strings.HasPrefix(analysis.Gr, prefix+",")
 		}) {
-			lemmas = append(lemmas, analysis.Lex)
+			lemmasSet[analysis.Lex] = struct{}{}
 		}
+	}
+
+	var lemmas []string
+	for item := range lemmasSet {
+		lemmas = append(lemmas, item)
 	}
 
 	return lemmas, nil
