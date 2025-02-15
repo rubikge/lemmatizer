@@ -1,7 +1,7 @@
 package mystem
 
 const (
-	MystemExecPath = "./mystem/bin/mystem"
+	MystemExecPath = "./bin/mystem"
 	MystemFlags    = "-dnig"
 	MystemFormat   = "json"
 )

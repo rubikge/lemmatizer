@@ -2,18 +2,28 @@ package main
 
 import (
 	"fmt"
-	"lemmatizer-app/mystem"
+	"os"
+
+	"github.com/rubikge/lemmatizer/internal/repository"
+	"github.com/rubikge/lemmatizer/internal/service"
 )
 
 func main() {
-	text := "Кошки мурлыкают, когда им хорошо."
-	lemmas, err := mystem.Lemmatize(text)
+	data, err := os.ReadFile("./testdata/lemmatizer_test_data.txt")
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println("Error reading file:", err)
 		return
 	}
 
-	for _, lemma := range lemmas {
-		fmt.Println(lemma)
+	r := repository.NewMystemRepository(data)
+
+	uc := service.NewLemmatizerService(r)
+
+	lemmas, err := uc.ProcessData(string(data))
+	if err != nil {
+		fmt.Println("Error processing data:", err)
+		return
 	}
+
+	fmt.Println(lemmas)
 }
