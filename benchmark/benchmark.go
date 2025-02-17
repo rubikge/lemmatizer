@@ -28,8 +28,9 @@ func sendRequest(text string) (time.Duration, error) {
 		return 0, err
 	}
 
+	buffer := bytes.NewBuffer(requestBody)
 	start := time.Now()
-	resp, err := http.Post("http://localhost:3000/lemmatize", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := http.Post("http://localhost:3000/lemmatize", "application/json", buffer)
 	if err != nil {
 		return 0, err
 	}
@@ -85,7 +86,7 @@ func RunTest(words []string, iterations int) {
 	}
 	defer f.Close()
 
-	header := fmt.Sprintf("Test passed!\nNmber os words in text: %d\nNumber of tests: %d\n", len(words), iterations)
+	header := fmt.Sprintf("Test passed!\nNumber of words in text: %d\nNumber of tests: %d\n", len(words), iterations)
 	recordToFile(f, header)
 	stats := fmt.Sprintf("Min time: %v\nMax time: %v\nAvg time: %v\n\n", minTime, maxTime, avgTime)
 	recordToFile(f, stats)

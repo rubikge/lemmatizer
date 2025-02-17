@@ -1,14 +1,7 @@
 Test passed!
-Nmber os words in text: 327
+Number of words in text: 327
 Number of tests: 5
-Min time: 680.2625ms
-Max time: 748.5117ms
-Avg time: 706.86944ms
-
-Test passed!
-Nmber os words in text: 327
-Number of tests: 5
-Min time: 705.6246ms
-Max time: 731.3424ms
-Avg time: 721.5079ms
+Min time: 664.7885ms
+Max time: 698.5593ms
+Avg time: 681.1638ms
 
