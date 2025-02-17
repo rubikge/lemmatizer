@@ -11,14 +11,13 @@ import (
 )
 
 type MystemRepository struct {
-	data []byte
 }
 
-func NewMystemRepository(data []byte) *MystemRepository {
-	return &MystemRepository{data: data}
+func NewMystemRepository() *MystemRepository {
+	return &MystemRepository{}
 }
 
-func (r *MystemRepository) GetDataStream() (<-chan model.AnalizedWord, error) {
+func (r *MystemRepository) GetDataStream(text string) (<-chan model.AnalizedWord, error) {
 	wordChan := make(chan model.AnalizedWord)
 
 	cmd := exec.Command(mystem.MystemExecPath, mystem.MystemFlags, "--format", mystem.MystemFormat)
@@ -45,7 +44,7 @@ func (r *MystemRepository) GetDataStream() (<-chan model.AnalizedWord, error) {
 
 		go func() {
 			defer stdin.Close()
-			stdin.Write(r.data)
+			stdin.Write([]byte(text))
 		}()
 
 		scanner := bufio.NewScanner(stdout)

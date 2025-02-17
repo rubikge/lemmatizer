@@ -16,8 +16,8 @@ func NewLemmatizerService(repo *repository.MystemRepository) *LemmatizerService 
 	return &LemmatizerService{repo: repo}
 }
 
-func (s *LemmatizerService) ProcessData(text string) ([]string, error) {
-	wordStream, err := s.repo.GetDataStream()
+func (s *LemmatizerService) GetLemmas(text string) ([]string, error) {
+	wordStream, err := s.repo.GetDataStream(text)
 	if err != nil {
 		return nil, err
 	}

@@ -1,31 +1,27 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
+	"github.com/gofiber/fiber/v3"
+	"github.com/rubikge/lemmatizer/internal/controller"
 	"github.com/rubikge/lemmatizer/internal/repository"
 	"github.com/rubikge/lemmatizer/internal/service"
 )
 
 func main() {
-	data, err := os.ReadFile("./testdata/lemmatizer_test_data.txt")
-	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return
-	}
+	// data, err := os.ReadFile("./testdata/lemmatizer_test_data.txt")
+	// if err != nil {
+	// 	fmt.Println("Error reading file:", err)
+	// 	return
+	// }
 
-	r := repository.NewMystemRepository(data)
+	r := repository.NewMystemRepository()
 
-	uc := service.NewLemmatizerService(r)
+	s := service.NewLemmatizerService(r)
 
-	lemmas, err := uc.ProcessData(string(data))
-	if err != nil {
-		fmt.Println("Error processing data:", err)
-		return
-	}
+	c := controller.NewLemmatizerFiberController(s)
 
-	for _, lemma := range lemmas {
-		fmt.Println(lemma)
-	}
+	app := fiber.New()
+	app.Post("/lemmatize", c.ProcessText)
+	app.Listen(":3000")
+
 }
