@@ -6,7 +6,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/rubikge/lemmatizer/internal/model"
+	"github.com/rubikge/lemmatizer/internal/models"
 	"github.com/rubikge/lemmatizer/internal/mystem"
 )
 
@@ -17,8 +17,8 @@ func NewMystemRepository() *MystemRepository {
 	return &MystemRepository{}
 }
 
-func (r *MystemRepository) GetDataStream(text string) (<-chan model.AnalizedWord, error) {
-	wordChan := make(chan model.AnalizedWord)
+func (r *MystemRepository) GetDataStream(text string) (<-chan models.AnalizedWord, error) {
+	wordChan := make(chan models.AnalizedWord)
 
 	cmd := exec.Command(mystem.MystemExecPath, mystem.MystemFlags, "--format", mystem.MystemFormat)
 
@@ -70,8 +70,8 @@ func (r *MystemRepository) GetDataStream(text string) (<-chan model.AnalizedWord
 	return wordChan, nil
 }
 
-func parseLine(line string) (model.AnalizedWord, error) {
-	var word model.AnalizedWord
+func parseLine(line string) (models.AnalizedWord, error) {
+	var word models.AnalizedWord
 	if err := json.Unmarshal([]byte(line), &word); err != nil {
 		return word, err
 	}

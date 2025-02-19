@@ -4,13 +4,13 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/rubikge/lemmatizer/internal/controller"
 	"github.com/rubikge/lemmatizer/internal/repository"
-	"github.com/rubikge/lemmatizer/internal/service"
+	"github.com/rubikge/lemmatizer/internal/services"
 )
 
 func main() {
 	r := repository.NewMystemRepository()
 
-	s := service.NewLemmatizerService(r)
+	s := services.NewLemmatizerService(r)
 
 	c := controller.NewLemmatizerFiberController(s)
 

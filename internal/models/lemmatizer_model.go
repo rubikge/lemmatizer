@@ -1,4 +1,4 @@
-package model
+package models
 
 type Analysis struct {
 	Lex string `json:"lex"`

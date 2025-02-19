@@ -1,4 +1,4 @@
-package service
+package services
 
 import (
 	"slices"
@@ -16,33 +16,49 @@ func NewLemmatizerService(repo *repository.MystemRepository) *LemmatizerService 
 	return &LemmatizerService{repo: repo}
 }
 
-func (s *LemmatizerService) GetLemmas(text string) ([]string, error) {
+type Lemma struct {
+	Word, Lemma string
+}
+
+func (s *LemmatizerService) GetLemmasArray(text string) ([]Lemma, error) {
 	wordStream, err := s.repo.GetDataStream(text)
 	if err != nil {
 		return nil, err
 	}
 
-	lemmasSet := make(map[string]struct{})
+	var lemmasArray []Lemma
 
 	for word := range wordStream {
 		if len(word.Analysis) == 0 {
-			lemmasSet[word.Text] = struct{}{}
+			lemmasArray = append(lemmasArray, Lemma{word.Text, word.Text})
 			continue
 		}
 
 		analysis := word.Analysis[0]
 
+		lemma := ""
 		if slices.ContainsFunc(mystem.NeededPrefixes, func(prefix string) bool {
 			return strings.HasPrefix(analysis.Gr, prefix+"=") || strings.HasPrefix(analysis.Gr, prefix+",")
 		}) {
-			lemmasSet[analysis.Lex] = struct{}{}
+			lemma = analysis.Lex
 		}
+		lemmasArray = append(lemmasArray, Lemma{word.Text, lemma})
 	}
 
-	var lemmas []string
-	for item := range lemmasSet {
-		lemmas = append(lemmas, item)
-	}
-
-	return lemmas, nil
+	return lemmasArray, nil
 }
+
+// func (s *LemmatizerService) GetLemmasMap(text string) (map[string]struct{}, error) {
+// 	lemmasArray, err := s.GetLemmasArray(text)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	lemmasMap := make(map[string]struct{})
+
+// 	for _, lemma := range lemmasArray {
+// 		lemmasMap[lemma] = struct{}{}
+// 	}
+
+// 	return lemmasMap, nil
+// }

@@ -2,14 +2,14 @@ package controller
 
 import (
 	"github.com/gofiber/fiber/v3"
-	"github.com/rubikge/lemmatizer/internal/service"
+	"github.com/rubikge/lemmatizer/internal/services"
 )
 
 type LemmatizerFiberController struct {
-	s *service.LemmatizerService
+	s *services.LemmatizerService
 }
 
-func NewLemmatizerFiberController(s *service.LemmatizerService) *LemmatizerFiberController {
+func NewLemmatizerFiberController(s *services.LemmatizerService) *LemmatizerFiberController {
 	return &LemmatizerFiberController{s: s}
 }
 
@@ -24,7 +24,7 @@ func (c *LemmatizerFiberController) ProcessText(ctx fiber.Ctx) error {
 		})
 	}
 
-	lemmas, err := c.s.GetLemmas(request.Text)
+	lemmas, err := c.s.GetLemmasArray(request.Text)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
