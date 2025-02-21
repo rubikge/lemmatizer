@@ -1,65 +1,142 @@
 package utils
 
-// import (
-// 	"strings"
+import (
+	"fmt"
+	"strings"
 
-// 	"github.com/rubikge/lemmatizer/internal/models"
-// 	"github.com/rubikge/lemmatizer/internal/services"
-// )
+	"github.com/rubikge/lemmatizer/internal/models"
+	"github.com/rubikge/lemmatizer/internal/services"
+)
 
-// func LemmatizeProduct(product *models.Product, s *services.LemmatizerService) error {
-// 	text := processProductJson(product)
+func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.LemmatizerService) ([]models.SearchProduct, error) {
+	searchProducts := getRawSearchProducts(product)
 
-// 	lemmas, err := s.GetLemmasArray(text)
-// 	if err != nil {
-// 		return err
-// 	}
+	err := lemmatizeSearchProducts(&searchProducts, lemmatizer)
+	if err != nil {
+		return nil, err
+	}
 
-// 	updateProduct(product, lemmas)
-// 	return nil
-// }
+	return searchProducts, nil
+}
 
-// func processProductJson(product *models.Product) string {
-// 	var sb strings.Builder
+func getRawSearchProducts(product *models.Product) []models.SearchProduct {
+	const positiveSearchKeywordWeight = 0.95
+	var searchProducts []models.SearchProduct
 
-// 	sb.WriteString(strings.Join(product.CommonPositiveKeywords, " ") + " ")
-// 	sb.WriteString(strings.Join(product.CommonNegativeKeywords, " ") + " ")
+	// Getting positive keywords
+	positiveSearchKeywords := make([]models.SearchKeyword, len(product.CommonPositiveKeywords))
+	for i, keyword := range product.CommonPositiveKeywords {
+		positiveSearchKeywords[i] = models.SearchKeyword{
+			Word:   keyword,
+			Weight: positiveSearchKeywordWeight,
+		}
+	}
 
-// 	for _, p := range product.SubProducts {
-// 		sb.WriteString(strings.Join(p.RequiredKeywords, " ") + " ")
-// 		for _, synonymGroup := range p.KeywordsWithSynonyms {
-// 			sb.WriteString(strings.Join(synonymGroup.Synonyms, " ") + " ")
-// 		}
-// 	}
+	for _, subProduct := range product.SubProducts {
+		// Create a copy of positiveSearchKeywords
+		searchKeywords := make([]models.SearchKeyword, len(positiveSearchKeywords))
+		copy(searchKeywords, positiveSearchKeywords)
 
-// 	return sb.String()
-// }
+		// Convert required keywords into a set for faster lookup
+		requiredKeywordSet := make(map[string]struct{}, len(subProduct.RequiredKeywords))
+		for _, requiredKeyword := range subProduct.RequiredKeywords {
+			requiredKeywordSet[requiredKeyword] = struct{}{}
+		}
 
-// func updateProduct(product *models.Product, lemmas []services.Lemma) error {
-// 	updatedProduct := *product
-// 	lemmasIndex := 0
+		// Adding synonym groups
+		for _, keyword := range subProduct.KeywordsWithSynonyms {
+			var synonymKeywords []models.SearchKeyword
 
-// 	filteredKeywords := updatedProduct.CommonPositiveKeywords[:0]
-// 	seen := make(map[string]struct{})
+			// Create a map to avoid duplicate synonyms
+			synonymSet := make(map[string]struct{}, len(keyword.Synonyms))
+			for _, synonym := range keyword.Synonyms {
+				synonymSet[synonym] = struct{}{}
 
-// 	for _, keyword := range updatedProduct.CommonPositiveKeywords {
-// 		if !(lemmasIndex < len(lemmas) && keyword == lemmas[lemmasIndex].Word) {
-// 			return
-// 		}
-// 		{
-// 			if lemmas[lemmasIndex].Lemma == "" {
-// 				lemmasIndex++
-// 				continue
-// 			}
-// 			keyword = lemmas[lemmasIndex].Lemma
-// 			lemmasIndex++
-// 		}
+				synonymKeywords = append(synonymKeywords, models.SearchKeyword{
+					Word:   synonym,
+					Weight: keyword.Weight,
+				})
+			}
 
-// 		if _, exists := seen[keyword]; !exists {
-// 			seen[keyword] = struct{}{}
-// 			filteredKeywords = append(filteredKeywords, keyword)
-// 		}
-// 	}
+			// Check if any synonym is a required keyword
+			for _, requiredKeyword := range subProduct.RequiredKeywords {
+				if _, isRequired := synonymSet[requiredKeyword]; isRequired {
+					for i := range synonymKeywords {
+						synonymKeywords[i].RequiredWord = requiredKeyword
+					}
+					break
+				}
+			}
 
-// 	updatedProduct.CommonPositiveKeywords = filteredKeywords
-// }
+			searchKeywords = append(searchKeywords, synonymKeywords...)
+		}
+
+		searchProducts = append(searchProducts, models.SearchProduct{
+			ProductTitle:           subProduct.ProductTitle,
+			RequiredKeywordsNumber: len(subProduct.RequiredKeywords),
+			MinCountWords:          subProduct.MinCountWords,
+			SearchKeywords:         searchKeywords,
+		})
+	}
+
+	return searchProducts
+}
+
+func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer *services.LemmatizerService) error {
+	var textBuilder strings.Builder
+
+	// Collect all words into a single text string
+	for _, searchProduct := range *searchProducts {
+		for _, searchKeyword := range searchProduct.SearchKeywords {
+			textBuilder.WriteString(searchKeyword.Word)
+			textBuilder.WriteString(" ")
+		}
+	}
+
+	lemmas, err := lemmatizer.GetLemmasArray(textBuilder.String())
+	if err != nil {
+		return err
+	}
+
+	if len(lemmas) < len(*searchProducts) {
+		return fmt.Errorf("Lemmatization error: Lemmas count is less than expected")
+	}
+
+	tempSearchProducts := make([]models.SearchProduct, len(*searchProducts))
+	copy(tempSearchProducts, *searchProducts)
+
+	lemmasIndex := 0
+
+	for i := range tempSearchProducts {
+		filteredSearchKeywords := make([]models.SearchKeyword, 0, len(tempSearchProducts[i].SearchKeywords))
+
+		for j := range tempSearchProducts[i].SearchKeywords {
+			if lemmasIndex >= len(lemmas) {
+				return fmt.Errorf("Lemmatization error: Lemma index out of range")
+			}
+
+			lemma := lemmas[lemmasIndex].Lemma
+			lemmasIndex++
+
+			if lemma == "" {
+				continue
+			}
+
+			// Update the keyword
+			tempSearchProducts[i].SearchKeywords[j].Word = lemma
+			filteredSearchKeywords = append(filteredSearchKeywords, tempSearchProducts[i].SearchKeywords[j])
+		}
+
+		// Update slice with filtered keywords
+		tempSearchProducts[i].SearchKeywords = filteredSearchKeywords
+	}
+
+	// Final lemma count check
+	if lemmasIndex != len(lemmas) {
+		return fmt.Errorf("Lemmatization error: Lemma count mismatch")
+	}
+
+	*searchProducts = tempSearchProducts
+
+	return nil
+}

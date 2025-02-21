@@ -7,19 +7,32 @@ type Product struct {
 }
 
 type SubProduct struct {
-	ProductTitle         string       `json:"product_title"`
-	RequiredKeywords     []string     `json:"required_keywords"`
-	MinCountWords        int          `json:"min_count_words"`
-	Weight               float64      `json:"waight"`
-	KeywordsWithSynonyms []WeightWord `json:"keywords_with_synonyms"`
+	ProductTitle         string                `json:"product_title"`
+	RequiredKeywords     []string              `json:"required_keywords"`
+	MinCountWords        int                   `json:"min_count_words"`
+	Weight               float64               `json:"waight"`
+	KeywordsWithSynonyms []KeywordWithSynonyms `json:"keywords_with_synonyms"`
 }
 
-type WeightWord struct {
-	Word   string  `json:"sinonyms"`
-	Weight float64 `json:"waight"`
+type KeywordWithSynonyms struct {
+	Synonyms []string `json:"sinonyms"`
+	Weight   float64  `json:"waight"`
 }
 
-type SearchData struct {
+type SearchProduct struct {
+	ProductTitle           string
+	RequiredKeywordsNumber int
+	MinCountWords          int
+	SearchKeywords         []SearchKeyword
+}
+
+type SearchKeyword struct {
+	Word         string
+	Weight       float64
+	RequiredWord string
+}
+
+type SearchResult struct {
 	ProductTitle string
-	Keywords     []WeightWord
+	TotalScore   float64
 }
