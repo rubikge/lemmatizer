@@ -9,9 +9,12 @@ import (
 )
 
 func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.LemmatizerService) ([]models.SearchProduct, error) {
-	searchProducts := getRawSearchProducts(product)
+	searchProducts, err := getRawSearchProducts(product)
+	if err != nil {
+		return nil, err
+	}
 
-	err := lemmatizeSearchProducts(&searchProducts, lemmatizer)
+	err = lemmatizeSearchProducts(&searchProducts, lemmatizer)
 	if err != nil {
 		return nil, err
 	}
@@ -19,28 +22,17 @@ func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.Le
 	return searchProducts, nil
 }
 
-func getRawSearchProducts(product *models.Product) []models.SearchProduct {
+func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, error) {
 	const positiveSearchKeywordWeight = 0.95
 	var searchProducts []models.SearchProduct
 
-	// Getting positive keywords
-	positiveSearchKeywords := make([]models.SearchKeyword, len(product.CommonPositiveKeywords))
-	for i, keyword := range product.CommonPositiveKeywords {
-		positiveSearchKeywords[i] = models.SearchKeyword{
-			Word:   keyword,
-			Weight: positiveSearchKeywordWeight,
-		}
-	}
-
 	for _, subProduct := range product.SubProducts {
-		// Create a copy of positiveSearchKeywords
-		searchKeywords := make([]models.SearchKeyword, len(positiveSearchKeywords))
-		copy(searchKeywords, positiveSearchKeywords)
+		var searchKeywords []models.SearchKeyword
 
-		// Convert required keywords into a set for faster lookup
-		requiredKeywordSet := make(map[string]struct{}, len(subProduct.RequiredKeywords))
-		for _, requiredKeyword := range subProduct.RequiredKeywords {
-			requiredKeywordSet[requiredKeyword] = struct{}{}
+		// Convert required keywords indexes into a set to check JSON
+		requiredKeywordIndexSet := make(map[int]struct{}, len(subProduct.RequiredKeywords))
+		for i := range subProduct.RequiredKeywords {
+			requiredKeywordIndexSet[i] = struct{}{}
 		}
 
 		// Adding synonym groups
@@ -53,17 +45,19 @@ func getRawSearchProducts(product *models.Product) []models.SearchProduct {
 				synonymSet[synonym] = struct{}{}
 
 				synonymKeywords = append(synonymKeywords, models.SearchKeyword{
-					Word:   synonym,
-					Weight: keyword.Weight,
+					Word:              synonym,
+					Weight:            keyword.Weight,
+					RequiredWordIndex: -1,
 				})
 			}
 
 			// Check if any synonym is a required keyword
-			for _, requiredKeyword := range subProduct.RequiredKeywords {
-				if _, isRequired := synonymSet[requiredKeyword]; isRequired {
+			for requiredKeywordIndex := range requiredKeywordIndexSet {
+				if _, isRequired := synonymSet[subProduct.RequiredKeywords[requiredKeywordIndex]]; isRequired {
 					for i := range synonymKeywords {
-						synonymKeywords[i].RequiredWord = requiredKeyword
+						synonymKeywords[i].RequiredWordIndex = requiredKeywordIndex
 					}
+					delete(requiredKeywordIndexSet, requiredKeywordIndex)
 					break
 				}
 			}
@@ -71,15 +65,32 @@ func getRawSearchProducts(product *models.Product) []models.SearchProduct {
 			searchKeywords = append(searchKeywords, synonymKeywords...)
 		}
 
+		if len(requiredKeywordIndexSet) != 0 {
+			return nil, fmt.Errorf("JSON error, Requred keyword for '%s' missing in synonyms", subProduct.ProductTitle)
+		}
+
+		// Get positive keywords
+		positiveSearchKeywords := make([]models.SearchKeyword, len(product.CommonPositiveKeywords))
+		for i, keyword := range product.CommonPositiveKeywords {
+			positiveSearchKeywords[i] = models.SearchKeyword{
+				Word:              keyword,
+				Weight:            positiveSearchKeywordWeight,
+				RequiredWordIndex: -1,
+			}
+		}
+
+		// add positive keywords at the end
+		searchKeywords = append(searchKeywords, positiveSearchKeywords...)
+
 		searchProducts = append(searchProducts, models.SearchProduct{
-			ProductTitle:           subProduct.ProductTitle,
-			RequiredKeywordsNumber: len(subProduct.RequiredKeywords),
-			MinCountWords:          subProduct.MinCountWords,
-			SearchKeywords:         searchKeywords,
+			ProductTitle:     subProduct.ProductTitle,
+			RequiredKeywords: subProduct.RequiredKeywords,
+			MinCountWords:    subProduct.MinCountWords,
+			SearchKeywords:   searchKeywords,
 		})
 	}
 
-	return searchProducts
+	return searchProducts, nil
 }
 
 func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer *services.LemmatizerService) error {
@@ -88,7 +99,11 @@ func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer 
 	// Collect all words into a single text string
 	for _, searchProduct := range *searchProducts {
 		for _, searchKeyword := range searchProduct.SearchKeywords {
-			textBuilder.WriteString(searchKeyword.Word)
+			word := searchKeyword.Word
+			if strings.Contains(word, " ") {
+				word = "errr"
+			}
+			textBuilder.WriteString(word)
 			textBuilder.WriteString(" ")
 		}
 	}
@@ -99,7 +114,7 @@ func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer 
 	}
 
 	if len(lemmas) < len(*searchProducts) {
-		return fmt.Errorf("Lemmatization error: Lemmas count is less than expected")
+		return fmt.Errorf("lemmatization error: lemmas count is less than expected")
 	}
 
 	tempSearchProducts := make([]models.SearchProduct, len(*searchProducts))
@@ -112,13 +127,13 @@ func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer 
 
 		for j := range tempSearchProducts[i].SearchKeywords {
 			if lemmasIndex >= len(lemmas) {
-				return fmt.Errorf("Lemmatization error: Lemma index out of range")
+				return fmt.Errorf("lemmatization error: lemma index out of range")
 			}
 
 			lemma := lemmas[lemmasIndex].Lemma
 			lemmasIndex++
 
-			if lemma == "" {
+			if lemma == "" || lemma == "errr" {
 				continue
 			}
 
@@ -133,7 +148,7 @@ func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer 
 
 	// Final lemma count check
 	if lemmasIndex != len(lemmas) {
-		return fmt.Errorf("Lemmatization error: Lemma count mismatch")
+		return fmt.Errorf("lemmatization error: lemma count mismatch")
 	}
 
 	*searchProducts = tempSearchProducts

@@ -35,3 +35,14 @@ func (c *LemmatizerFiberController) ProcessText(ctx fiber.Ctx) error {
 		"lemmas": lemmas,
 	})
 }
+
+// func (c *LemmatizerFiberController) SearchHandler(ctx fiber.Ctx) error {
+// 	var requestData models.RequestData
+
+// 	if err := ctx.Bind().JSON(&requestData); err != nil {
+// 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"error": "Invalid JSON",
+// 		})
+// 	}
+
+// }

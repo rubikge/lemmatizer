@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rubikge/lemmatizer/internal/models"
 	"github.com/rubikge/lemmatizer/internal/mystem"
 	"github.com/rubikge/lemmatizer/internal/repository"
 )
@@ -16,21 +17,17 @@ func NewLemmatizerService(repo *repository.MystemRepository) *LemmatizerService 
 	return &LemmatizerService{repo: repo}
 }
 
-type Lemma struct {
-	Word, Lemma string
-}
-
-func (s *LemmatizerService) GetLemmasArray(text string) ([]Lemma, error) {
+func (s *LemmatizerService) GetLemmasArray(text string) ([]models.Lemma, error) {
 	wordStream, err := s.repo.GetDataStream(text)
 	if err != nil {
 		return nil, err
 	}
 
-	var lemmasArray []Lemma
+	var lemmasArray []models.Lemma
 
 	for word := range wordStream {
 		if len(word.Analysis) == 0 {
-			lemmasArray = append(lemmasArray, Lemma{word.Text, word.Text})
+			lemmasArray = append(lemmasArray, models.Lemma{Word: word.Text, Lemma: word.Text})
 			continue
 		}
 
@@ -42,7 +39,7 @@ func (s *LemmatizerService) GetLemmasArray(text string) ([]Lemma, error) {
 		}) {
 			lemma = analysis.Lex
 		}
-		lemmasArray = append(lemmasArray, Lemma{word.Text, lemma})
+		lemmasArray = append(lemmasArray, models.Lemma{Word: word.Text, Lemma: lemma})
 	}
 
 	return lemmasArray, nil

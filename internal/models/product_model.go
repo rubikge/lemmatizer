@@ -18,21 +18,3 @@ type KeywordWithSynonyms struct {
 	Synonyms []string `json:"sinonyms"`
 	Weight   float64  `json:"waight"`
 }
-
-type SearchProduct struct {
-	ProductTitle           string
-	RequiredKeywordsNumber int
-	MinCountWords          int
-	SearchKeywords         []SearchKeyword
-}
-
-type SearchKeyword struct {
-	Word         string
-	Weight       float64
-	RequiredWord string
-}
-
-type SearchResult struct {
-	ProductTitle string
-	TotalScore   float64
-}

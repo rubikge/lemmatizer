@@ -9,3 +9,7 @@ type AnalizedWord struct {
 	Analysis []Analysis `json:"analysis"`
 	Text     string     `json:"text"`
 }
+
+type Lemma struct {
+	Word, Lemma string
+}
