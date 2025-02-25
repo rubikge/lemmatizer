@@ -14,7 +14,7 @@ type SearchKeyword struct {
 }
 
 type SearchResult struct {
-	Found        bool
-	ProductTitle string
-	TotalScore   float64
+	Found        bool    `json:"found"`
+	ProductTitle string  `json:"product_title"`
+	TotalScore   float64 `json:"total_score"`
 }

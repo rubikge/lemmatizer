@@ -2,8 +2,8 @@ package tests
 
 var SearchRequestJson = []byte(`
 {
-  message: "Ищу качественный сервис, хочу отремонтировать мой велисапед. Что подскажете?",
-  product: {
+  "message": "Ищу качественный сервис, хочу отремонтировать мой велисапед. Что подскажете?",
+  "product": {
     "common_positive_keywords": [
       "ищу",
       "нужен",

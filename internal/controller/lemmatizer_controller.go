@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"fmt"
-
 	"github.com/gofiber/fiber/v3"
 	"github.com/rubikge/lemmatizer/internal/models"
 	"github.com/rubikge/lemmatizer/internal/services"
@@ -48,7 +46,6 @@ func (c *LemmatizerFiberController) SearchHandler(ctx fiber.Ctx) error {
 			"error": "Invalid JSON",
 		})
 	}
-	fmt.Println(requestData)
 
 	lemmas, err := c.s.GetLemmas(requestData.Message)
 	if err != nil {
@@ -65,10 +62,5 @@ func (c *LemmatizerFiberController) SearchHandler(ctx fiber.Ctx) error {
 	}
 
 	result := services.GetScore(&lemmas, &searchProducts)
-
-	return ctx.JSON(fiber.Map{
-		"Found":        result.Found,
-		"ProductTitle": result.ProductTitle,
-		"TotalScore":   result.TotalScore,
-	})
+	return ctx.JSON(result)
 }

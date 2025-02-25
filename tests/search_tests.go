@@ -2,8 +2,12 @@ package tests
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+
+	"github.com/rubikge/lemmatizer/internal/models"
 )
 
 func RunSearchTest(jsonData []byte) {
@@ -15,6 +19,17 @@ func RunSearchTest(jsonData []byte) {
 	}
 	defer resp.Body.Close()
 
-	fmt.Println(resp)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response body:", err)
+		return
+	}
 
+	var responseData models.SearchResult
+	if err := json.Unmarshal(body, &responseData); err != nil {
+		fmt.Println("Error decoding JSON:", err)
+		return
+	}
+
+	fmt.Printf("Response Struct: %+v\n", responseData)
 }
