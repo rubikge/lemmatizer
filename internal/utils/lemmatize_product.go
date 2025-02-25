@@ -8,6 +8,8 @@ import (
 	"github.com/rubikge/lemmatizer/internal/services"
 )
 
+const positiveSearchKeywordWeight = 0.45
+
 func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.LemmatizerService) ([]models.SearchProduct, error) {
 	searchProducts, err := getRawSearchProducts(product)
 	if err != nil {
@@ -23,7 +25,6 @@ func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.Le
 }
 
 func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, error) {
-	const positiveSearchKeywordWeight = 0.95
 	var searchProducts []models.SearchProduct
 
 	for _, subProduct := range product.SubProducts {

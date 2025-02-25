@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -43,6 +44,24 @@ func (s *LemmatizerService) GetLemmasArray(text string) ([]models.Lemma, error) 
 	}
 
 	return lemmasArray, nil
+}
+
+func (s *LemmatizerService) GetLemmas(text string) ([]string, error) {
+	fmt.Printf("Lemmatizing string '%s'...\n", text)
+	lemmas, err := s.GetLemmasArray(text)
+	if err != nil {
+		return nil, err
+	}
+
+	words := make([]string, 0, len(lemmas))
+	for _, lemma := range lemmas {
+		word := lemma.Lemma
+		if word != "" {
+			words = append(words, lemma.Lemma)
+		}
+	}
+	fmt.Printf("Lemmas: %s.\n\n", strings.Join(words, ", "))
+	return words, nil
 }
 
 // func (s *LemmatizerService) GetLemmasMap(text string) (map[string]struct{}, error) {
