@@ -1,8 +1,12 @@
 package controller
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v3"
+	"github.com/rubikge/lemmatizer/internal/models"
 	"github.com/rubikge/lemmatizer/internal/services"
+	"github.com/rubikge/lemmatizer/internal/utils"
 )
 
 type LemmatizerFiberController struct {
@@ -13,7 +17,7 @@ func NewLemmatizerFiberController(s *services.LemmatizerService) *LemmatizerFibe
 	return &LemmatizerFiberController{s: s}
 }
 
-func (c *LemmatizerFiberController) ProcessText(ctx fiber.Ctx) error {
+func (c *LemmatizerFiberController) LemmatizeHandler(ctx fiber.Ctx) error {
 	var request struct {
 		Text string `json:"text"`
 	}
@@ -24,7 +28,7 @@ func (c *LemmatizerFiberController) ProcessText(ctx fiber.Ctx) error {
 		})
 	}
 
-	lemmas, err := c.s.GetLemmasArray(request.Text)
+	lemmas, err := c.s.GetLemmas(request.Text)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
@@ -36,13 +40,35 @@ func (c *LemmatizerFiberController) ProcessText(ctx fiber.Ctx) error {
 	})
 }
 
-// func (c *LemmatizerFiberController) SearchHandler(ctx fiber.Ctx) error {
-// 	var requestData models.RequestData
+func (c *LemmatizerFiberController) SearchHandler(ctx fiber.Ctx) error {
+	var requestData models.RequestData
 
-// 	if err := ctx.Bind().JSON(&requestData); err != nil {
-// 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-// 			"error": "Invalid JSON",
-// 		})
-// 	}
+	if err := ctx.Bind().JSON(&requestData); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid JSON",
+		})
+	}
+	fmt.Println(requestData)
 
-// }
+	lemmas, err := c.s.GetLemmas(requestData.Message)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	searchProducts, err := utils.GetLemmatizedSearchProduct(&requestData.Product, c.s)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	result := services.GetScore(&lemmas, &searchProducts)
+
+	return ctx.JSON(fiber.Map{
+		"Found":        result.Found,
+		"ProductTitle": result.ProductTitle,
+		"TotalScore":   result.TotalScore,
+	})
+}

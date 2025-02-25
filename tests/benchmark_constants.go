@@ -1,4 +1,4 @@
-package benchmark
+package tests
 
 const (
 	TestFilePath = "./benchmark/results.txt"

@@ -15,7 +15,7 @@ func main() {
 	c := controller.NewLemmatizerFiberController(s)
 
 	app := fiber.New()
-	app.Post("/lemmatize", c.ProcessText)
+	app.Post("/lemmatize", c.LemmatizeHandler)
+	app.Post("/search", c.SearchHandler)
 	app.Listen(":3000")
-
 }

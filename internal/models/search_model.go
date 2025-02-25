@@ -14,6 +14,7 @@ type SearchKeyword struct {
 }
 
 type SearchResult struct {
+	Found        bool
 	ProductTitle string
 	TotalScore   float64
 }

@@ -1,4 +1,4 @@
-package benchmark
+package tests
 
 import (
 	"bytes"
@@ -50,7 +50,7 @@ func recordToFile(f *os.File, str string) {
 	}
 }
 
-func RunTest(words []string, iterations int) {
+func RunLemmatizerTest(words []string, iterations int) {
 	times := make([]time.Duration, 0, iterations)
 
 	for i := 0; i < iterations; i++ {

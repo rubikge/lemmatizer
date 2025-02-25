@@ -114,15 +114,18 @@ func GetScore(words *[]string, searchProducts *[]models.SearchProduct) models.Se
 			fmt.Println(" }")
 
 			if totalScore >= goalTotalScore && requiredWordsCount >= minRequiredWordsCount {
-				fmt.Printf("Result: positive. Total score - %.2f.\n\n\n", totalScore)
+				fmt.Printf("Result: positive. Total score - %.2f.\n\n", totalScore)
 				return models.SearchResult{
+					Found:        true,
 					ProductTitle: searchProduct.ProductTitle,
 					TotalScore:   totalScore,
 				}
 			}
 		}
-		fmt.Printf("Result: negative. Total score - %.2f, required words number - %d.\n\n\n", totalScore, requiredWordsCount)
+		fmt.Printf("Result: negative. Total score - %.2f, required words number - %d.\n\n", totalScore, requiredWordsCount)
 	}
 
-	return models.SearchResult{}
+	return models.SearchResult{
+		Found: false,
+	}
 }
