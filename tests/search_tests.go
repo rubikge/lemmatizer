@@ -13,7 +13,7 @@ import (
 func RunSearchTest(jsonData []byte) {
 	buffer := bytes.NewBuffer(jsonData)
 
-	resp, err := http.Post("http://localhost:3000/search", "application/json", buffer)
+	resp, err := http.Post("http://127.0.0.1:3000/search", "application/json", buffer)
 	if err != nil {
 		fmt.Println(err)
 	}
