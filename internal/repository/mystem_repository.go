@@ -3,71 +3,63 @@ package repository
 import (
 	"bufio"
 	"encoding/json"
-	"log"
+	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/rubikge/lemmatizer/internal/models"
 	"github.com/rubikge/lemmatizer/internal/mystem"
 )
 
 type MystemRepository struct {
+	myStem *exec.Cmd
 }
 
 func NewMystemRepository() *MystemRepository {
-	return &MystemRepository{}
+	myStem := exec.Command(mystem.MystemExecPath, mystem.MystemFlags, "--format", mystem.MystemFormat)
+	return &MystemRepository{
+		myStem: myStem,
+	}
 }
 
-func (r *MystemRepository) GetDataStream(text string) (<-chan models.AnalizedWord, error) {
-	wordChan := make(chan models.AnalizedWord)
+func (r *MystemRepository) GetAnalysis(text string) ([]models.AnalizedWord, error) {
+	r.myStem.Stdin = strings.NewReader(text)
 
-	cmd := exec.Command(mystem.MystemExecPath, mystem.MystemFlags, "--format", mystem.MystemFormat)
-
-	stdin, err := cmd.StdinPipe()
+	stdout, err := r.myStem.StdoutPipe()
 	if err != nil {
-		log.Printf("error getting stdin pipe: %v", err)
+		fmt.Printf("error getting stdout pipe: %v", err)
 		return nil, err
 	}
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("error getting stdout pipe: %v", err)
+	if err := r.myStem.Start(); err != nil {
+		fmt.Printf("error starting mystem: %v", err)
 		return nil, err
 	}
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("error starting mystem: %v", err)
-		return nil, err
+	scanner := bufio.NewScanner(stdout)
+	var analysis []models.AnalizedWord
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		word, err := parseLine(line)
+
+		if err != nil {
+			fmt.Printf("error parsing line: %v", err)
+			continue
+		}
+
+		analysis = append(analysis, word)
 	}
 
-	go func() {
-		defer close(wordChan)
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("error scanning output: %v", err)
+	}
 
-		go func() {
-			defer stdin.Close()
-			stdin.Write([]byte(text))
-		}()
+	if err := r.myStem.Wait(); err != nil {
+		fmt.Printf("error waiting for mystem: %v", err)
+	}
 
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			word, err := parseLine(line)
-			if err != nil {
-				log.Printf("error parsing line: %v", err)
-				continue
-			}
-			wordChan <- word
-		}
-
-		if err := scanner.Err(); err != nil {
-			log.Printf("error scanning output: %v", err)
-		}
-
-		if err := cmd.Wait(); err != nil {
-			log.Printf("error waiting for mystem: %v", err)
-		}
-	}()
-
-	return wordChan, nil
+	return analysis, nil
 }
 
 func parseLine(line string) (models.AnalizedWord, error) {

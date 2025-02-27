@@ -19,14 +19,14 @@ func NewLemmatizerService(repo *repository.MystemRepository) *LemmatizerService 
 }
 
 func (s *LemmatizerService) GetLemmasArray(text string) ([]models.Lemma, error) {
-	wordStream, err := s.repo.GetDataStream(text)
+	analysis, err := s.repo.GetAnalysis(text)
 	if err != nil {
 		return nil, err
 	}
 
 	var lemmasArray []models.Lemma
 
-	for word := range wordStream {
+	for _, word := range analysis {
 		if len(word.Analysis) == 0 {
 			lemmasArray = append(lemmasArray, models.Lemma{Word: word.Text, Lemma: word.Text})
 			continue
