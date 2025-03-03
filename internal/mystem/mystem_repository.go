@@ -8,27 +8,23 @@ import (
 	"strings"
 )
 
-type MystemRepository struct {
-	myStem *exec.Cmd
-}
+type MystemRepository struct{}
 
 func NewMystemRepository() *MystemRepository {
-	myStem := exec.Command(MystemExecPath, MystemFlags, "--format", MystemFormat)
-	return &MystemRepository{
-		myStem: myStem,
-	}
+	return &MystemRepository{}
 }
 
 func (r *MystemRepository) GetAnalysis(text string) ([]AnalizedWord, error) {
-	r.myStem.Stdin = strings.NewReader(text)
+	myStem := exec.Command(MystemExecPath, MystemFlags, "--format", MystemFormat)
+	myStem.Stdin = strings.NewReader(text)
 
-	stdout, err := r.myStem.StdoutPipe()
+	stdout, err := myStem.StdoutPipe()
 	if err != nil {
 		fmt.Printf("error getting stdout pipe: %v", err)
 		return nil, err
 	}
 
-	if err := r.myStem.Start(); err != nil {
+	if err := myStem.Start(); err != nil {
 		fmt.Printf("error starting mystem: %v", err)
 		return nil, err
 	}
@@ -52,7 +48,7 @@ func (r *MystemRepository) GetAnalysis(text string) ([]AnalizedWord, error) {
 		fmt.Printf("error scanning output: %v", err)
 	}
 
-	if err := r.myStem.Wait(); err != nil {
+	if err := myStem.Wait(); err != nil {
 		fmt.Printf("error waiting for mystem: %v", err)
 	}
 

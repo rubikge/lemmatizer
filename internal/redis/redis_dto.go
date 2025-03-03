@@ -1,12 +1,13 @@
 package redis
 
-type Response struct {
-	Status string `json:"status"`
-	Data   string `json:"data"`
-}
-
 const (
 	StatusProcessing = "Processing..."
-	StatusDone       = "Done"
 	StatusError      = "Error"
+	StatusSuccess    = "Success"
 )
+
+type TaskError struct {
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+	Retries   int    `json:"retries"`
+}

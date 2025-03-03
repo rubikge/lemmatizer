@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/rubikge/lemmatizer/internal/api"
 	"github.com/rubikge/lemmatizer/internal/redis"
@@ -8,7 +10,12 @@ import (
 )
 
 func main() {
-	rq := redis.NewRedisQueue()
+	rq, err := redis.NewRedisQueue()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	s := search.NewSearchService()
 
 	app := fiber.New()

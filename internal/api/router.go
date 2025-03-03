@@ -7,7 +7,7 @@ import (
 	"github.com/rubikge/lemmatizer/internal/redis"
 )
 
-func Router(app *fiber.App, rq *redis.RedisQueue, ls *lemmatizer.LemmatizerService) {
+func Router(app *fiber.App, rq redis.RedisQueueInterface, ls *lemmatizer.LemmatizerService) {
 	lc := controller.NewLemmatizeController(ls)
 	sc := controller.NewSearchController(rq)
 
