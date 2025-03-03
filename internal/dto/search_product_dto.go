@@ -1,4 +1,4 @@
-package models
+package dto
 
 type SearchProduct struct {
 	ProductTitle     string

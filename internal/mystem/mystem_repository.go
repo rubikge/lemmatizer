@@ -1,4 +1,4 @@
-package repository
+package mystem
 
 import (
 	"bufio"
@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-
-	"github.com/rubikge/lemmatizer/internal/models"
-	"github.com/rubikge/lemmatizer/internal/mystem"
 )
 
 type MystemRepository struct {
@@ -16,13 +13,13 @@ type MystemRepository struct {
 }
 
 func NewMystemRepository() *MystemRepository {
-	myStem := exec.Command(mystem.MystemExecPath, mystem.MystemFlags, "--format", mystem.MystemFormat)
+	myStem := exec.Command(MystemExecPath, MystemFlags, "--format", MystemFormat)
 	return &MystemRepository{
 		myStem: myStem,
 	}
 }
 
-func (r *MystemRepository) GetAnalysis(text string) ([]models.AnalizedWord, error) {
+func (r *MystemRepository) GetAnalysis(text string) ([]AnalizedWord, error) {
 	r.myStem.Stdin = strings.NewReader(text)
 
 	stdout, err := r.myStem.StdoutPipe()
@@ -37,7 +34,7 @@ func (r *MystemRepository) GetAnalysis(text string) ([]models.AnalizedWord, erro
 	}
 
 	scanner := bufio.NewScanner(stdout)
-	var analysis []models.AnalizedWord
+	var analysis []AnalizedWord
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -62,8 +59,8 @@ func (r *MystemRepository) GetAnalysis(text string) ([]models.AnalizedWord, erro
 	return analysis, nil
 }
 
-func parseLine(line string) (models.AnalizedWord, error) {
-	var word models.AnalizedWord
+func parseLine(line string) (AnalizedWord, error) {
+	var word AnalizedWord
 	if err := json.Unmarshal([]byte(line), &word); err != nil {
 		return word, err
 	}

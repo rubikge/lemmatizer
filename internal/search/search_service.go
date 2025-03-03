@@ -1,22 +1,32 @@
-package services
+package search
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/blevesearch/bleve"
-	"github.com/rubikge/lemmatizer/internal/models"
+	"github.com/rubikge/lemmatizer/internal/dto"
+	"github.com/rubikge/lemmatizer/internal/lemmatizer"
+	"github.com/rubikge/lemmatizer/internal/mystem"
 )
 
 type searchKeyword struct {
 	Word string `json:"word"`
 }
 
-const minRequiredWordsCount = 2
-const goalTotalScore = 1.0
+type SearchService struct {
+	Lemmatizer *lemmatizer.LemmatizerService
+}
 
-func getIndex(searchKeywords *[]models.SearchKeyword) (bleve.Index, error) {
+func NewSearchService() *SearchService {
+	r := mystem.NewMystemRepository()
+	ls := lemmatizer.NewLemmatizerService(r)
+	return &SearchService{Lemmatizer: ls}
+}
+
+func getIndex(searchKeywords *[]dto.SearchKeyword) (bleve.Index, error) {
 	indexMapping := bleve.NewIndexMapping()
 	docMapping := bleve.NewDocumentMapping()
 
@@ -44,7 +54,33 @@ func getIndex(searchKeywords *[]models.SearchKeyword) (bleve.Index, error) {
 	return index, nil
 }
 
-func GetScore(words *[]string, searchProducts *[]models.SearchProduct) models.SearchResult {
+func (s *SearchService) GetScore(request string) (string, error) {
+	var requestData dto.RequestData
+	if err := json.Unmarshal([]byte(request), &requestData); err != nil {
+		return "", err
+	}
+
+	lemmas, err := s.Lemmatizer.GetLemmas(requestData.Message)
+	if err != nil {
+		return "", err
+	}
+
+	searchProducts, err := s.Lemmatizer.GetLemmatizedSearchProduct(&requestData.Product)
+	if err != nil {
+		return "", err
+	}
+
+	result := s.getScore(&lemmas, &searchProducts)
+
+	response, err := json.Marshal(result)
+	if err != nil {
+		return "", err
+	}
+
+	return string(response), nil
+}
+
+func (s *SearchService) getScore(words *[]string, searchProducts *[]dto.SearchProduct) dto.SearchResult {
 	fmt.Printf(
 		"Goal Total Score - %.2f, Min required words number - %d\n\n",
 		goalTotalScore,
@@ -115,7 +151,7 @@ func GetScore(words *[]string, searchProducts *[]models.SearchProduct) models.Se
 
 			if totalScore >= goalTotalScore && requiredWordsCount >= minRequiredWordsCount {
 				fmt.Printf("Result: positive. Total score - %.2f.\n\n", totalScore)
-				return models.SearchResult{
+				return dto.SearchResult{
 					Found:        true,
 					ProductTitle: searchProduct.ProductTitle,
 					TotalScore:   totalScore,
@@ -125,7 +161,7 @@ func GetScore(words *[]string, searchProducts *[]models.SearchProduct) models.Se
 		fmt.Printf("Result: negative. Total score - %.2f, required words number - %d.\n\n", totalScore, requiredWordsCount)
 	}
 
-	return models.SearchResult{
+	return dto.SearchResult{
 		Found: false,
 	}
 }

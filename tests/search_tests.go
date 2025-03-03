@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/rubikge/lemmatizer/internal/models"
+	"github.com/rubikge/lemmatizer/internal/dto"
 )
 
 func RunSearchTest(jsonData []byte) {
@@ -25,7 +25,7 @@ func RunSearchTest(jsonData []byte) {
 		return
 	}
 
-	var responseData models.SearchResult
+	var responseData dto.SearchResult
 	if err := json.Unmarshal(body, &responseData); err != nil {
 		fmt.Println("Error decoding JSON:", err)
 		return

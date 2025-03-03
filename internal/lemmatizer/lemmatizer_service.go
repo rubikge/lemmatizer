@@ -1,22 +1,75 @@
-package utils
+package lemmatizer
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
-	"github.com/rubikge/lemmatizer/internal/models"
-	"github.com/rubikge/lemmatizer/internal/services"
+	"github.com/rubikge/lemmatizer/internal/dto"
+	"github.com/rubikge/lemmatizer/internal/mystem"
 )
 
-const positiveSearchKeywordWeight = 0.45
+type LemmatizerService struct {
+	repo *mystem.MystemRepository
+}
 
-func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.LemmatizerService) ([]models.SearchProduct, error) {
-	searchProducts, err := getRawSearchProducts(product)
+func NewLemmatizerService(repo *mystem.MystemRepository) *LemmatizerService {
+	return &LemmatizerService{repo: repo}
+}
+
+func (ls *LemmatizerService) GetLemmasArray(text string) ([]Lemma, error) {
+	analysis, err := ls.repo.GetAnalysis(text)
 	if err != nil {
 		return nil, err
 	}
 
-	err = lemmatizeSearchProducts(&searchProducts, lemmatizer)
+	var lemmasArray []Lemma
+
+	for _, word := range analysis {
+		if len(word.Analysis) == 0 {
+			lemmasArray = append(lemmasArray, Lemma{Word: word.Text, Lemma: word.Text})
+			continue
+		}
+
+		analysis := word.Analysis[0]
+
+		lemma := ""
+		if slices.ContainsFunc(mystem.NeededPrefixes, func(prefix string) bool {
+			return strings.HasPrefix(analysis.Gr, prefix+"=") || strings.HasPrefix(analysis.Gr, prefix+",")
+		}) {
+			lemma = analysis.Lex
+		}
+		lemmasArray = append(lemmasArray, Lemma{Word: word.Text, Lemma: lemma})
+	}
+
+	return lemmasArray, nil
+}
+
+func (ls *LemmatizerService) GetLemmas(text string) ([]string, error) {
+	fmt.Printf("Lemmatizing string '%s'...\n", text)
+	lemmas, err := ls.GetLemmasArray(text)
+	if err != nil {
+		return nil, err
+	}
+
+	words := make([]string, 0, len(lemmas))
+	for _, lemma := range lemmas {
+		word := lemma.Lemma
+		if word != "" {
+			words = append(words, lemma.Lemma)
+		}
+	}
+	fmt.Printf("Lemmas: %s.\n\n", strings.Join(words, ", "))
+	return words, nil
+}
+
+func (ls *LemmatizerService) GetLemmatizedSearchProduct(product *dto.Product) ([]dto.SearchProduct, error) {
+	searchProducts, err := getRawSearchProducts(product, positiveSearchKeywordWeight)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ls.lemmatizeSearchProducts(&searchProducts)
 	if err != nil {
 		return nil, err
 	}
@@ -24,11 +77,11 @@ func GetLemmatizedSearchProduct(product *models.Product, lemmatizer *services.Le
 	return searchProducts, nil
 }
 
-func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, error) {
-	var searchProducts []models.SearchProduct
+func getRawSearchProducts(product *dto.Product, positiveWeight float64) ([]dto.SearchProduct, error) {
+	var searchProducts []dto.SearchProduct
 
 	for _, subProduct := range product.SubProducts {
-		var searchKeywords []models.SearchKeyword
+		var searchKeywords []dto.SearchKeyword
 
 		// Convert required keywords indexes into a set to check JSON
 		requiredKeywordIndexSet := make(map[int]struct{}, len(subProduct.RequiredKeywords))
@@ -38,14 +91,14 @@ func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, erro
 
 		// Adding synonym groups
 		for _, keyword := range subProduct.KeywordsWithSynonyms {
-			var synonymKeywords []models.SearchKeyword
+			var synonymKeywords []dto.SearchKeyword
 
 			// Create a map to avoid duplicate synonyms
 			synonymSet := make(map[string]struct{}, len(keyword.Synonyms))
 			for _, synonym := range keyword.Synonyms {
 				synonymSet[synonym] = struct{}{}
 
-				synonymKeywords = append(synonymKeywords, models.SearchKeyword{
+				synonymKeywords = append(synonymKeywords, dto.SearchKeyword{
 					Word:              synonym,
 					Weight:            keyword.Weight,
 					RequiredWordIndex: -1,
@@ -71,11 +124,11 @@ func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, erro
 		}
 
 		// Get positive keywords
-		positiveSearchKeywords := make([]models.SearchKeyword, len(product.CommonPositiveKeywords))
+		positiveSearchKeywords := make([]dto.SearchKeyword, len(product.CommonPositiveKeywords))
 		for i, keyword := range product.CommonPositiveKeywords {
-			positiveSearchKeywords[i] = models.SearchKeyword{
+			positiveSearchKeywords[i] = dto.SearchKeyword{
 				Word:              keyword,
-				Weight:            positiveSearchKeywordWeight,
+				Weight:            positiveWeight,
 				RequiredWordIndex: -1,
 			}
 		}
@@ -83,7 +136,7 @@ func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, erro
 		// add positive keywords at the end
 		searchKeywords = append(searchKeywords, positiveSearchKeywords...)
 
-		searchProducts = append(searchProducts, models.SearchProduct{
+		searchProducts = append(searchProducts, dto.SearchProduct{
 			ProductTitle:     subProduct.ProductTitle,
 			RequiredKeywords: subProduct.RequiredKeywords,
 			MinCountWords:    subProduct.MinCountWords,
@@ -94,7 +147,7 @@ func getRawSearchProducts(product *models.Product) ([]models.SearchProduct, erro
 	return searchProducts, nil
 }
 
-func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer *services.LemmatizerService) error {
+func (ls *LemmatizerService) lemmatizeSearchProducts(searchProducts *[]dto.SearchProduct) error {
 	var textBuilder strings.Builder
 
 	// Collect all words into a single text string
@@ -109,7 +162,7 @@ func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer 
 		}
 	}
 
-	lemmas, err := lemmatizer.GetLemmasArray(textBuilder.String())
+	lemmas, err := ls.GetLemmasArray(textBuilder.String())
 	if err != nil {
 		return err
 	}
@@ -118,13 +171,13 @@ func lemmatizeSearchProducts(searchProducts *[]models.SearchProduct, lemmatizer 
 		return fmt.Errorf("lemmatization error: lemmas count is less than expected")
 	}
 
-	tempSearchProducts := make([]models.SearchProduct, len(*searchProducts))
+	tempSearchProducts := make([]dto.SearchProduct, len(*searchProducts))
 	copy(tempSearchProducts, *searchProducts)
 
 	lemmasIndex := 0
 
 	for i := range tempSearchProducts {
-		filteredSearchKeywords := make([]models.SearchKeyword, 0, len(tempSearchProducts[i].SearchKeywords))
+		filteredSearchKeywords := make([]dto.SearchKeyword, 0, len(tempSearchProducts[i].SearchKeywords))
 
 		for j := range tempSearchProducts[i].SearchKeywords {
 			if lemmasIndex >= len(lemmas) {

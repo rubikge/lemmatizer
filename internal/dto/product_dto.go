@@ -1,4 +1,4 @@
-package models
+package dto
 
 type Product struct {
 	CommonPositiveKeywords []string     `json:"common_positive_keywords"`
