@@ -9,10 +9,14 @@ RUN curl -L -o /tmp/mystem.tar.gz "https://download.cdn.yandex.net/mystem/mystem
     && chmod +x /usr/local/bin/mystem
 
 WORKDIR /app
+
+COPY go.* ./
+RUN go mod download
+
 COPY . .
 
 # Build app
-RUN go build -o main ./cmd/lemmatizer/.
+RUN go build -o main .
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates libc6-compat
