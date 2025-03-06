@@ -5,23 +5,18 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/rubikge/lemmatizer/internal/api"
-	"github.com/rubikge/lemmatizer/internal/redis"
 	"github.com/rubikge/lemmatizer/internal/search"
 )
 
 func main() {
-	rq, err := redis.NewRedisQueue()
+	s, err := search.NewService("mySearch")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	s := search.NewSearchService()
-
 	app := fiber.New()
-	api.Router(app, rq, s.Lemmatizer)
-
-	rq.StartWorker("search_worker", s.GetScore)
+	api.Router(app, s)
 
 	app.Listen(":3000")
 }

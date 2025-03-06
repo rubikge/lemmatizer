@@ -1,65 +1,62 @@
 package controller
 
 import (
-	"encoding/json"
-
 	"github.com/gofiber/fiber/v3"
-	"github.com/rubikge/lemmatizer/internal/redis"
+	"github.com/rubikge/lemmatizer/internal/dto"
+	"github.com/rubikge/lemmatizer/internal/search"
 )
 
 type SearchController struct {
-	rq redis.RedisQueueInterface
+	searchService *search.Service
 }
 
-func NewSearchController(rq redis.RedisQueueInterface) *SearchController {
-	return &SearchController{rq: rq}
+func NewSearchController(s *search.Service) *SearchController {
+	return &SearchController{searchService: s}
 }
 
 func (c *SearchController) ProcessHandler(ctx fiber.Ctx) error {
-	taskId, err := c.rq.AddRequestToQueue(string(ctx.Body()))
-	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to enqueue task"})
+	var requestData dto.RequestData
+	if err := ctx.Bind().JSON(&requestData); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status": "Error",
+			"error":  "Invalid request format",
+		})
 	}
 
-	return ctx.JSON(fiber.Map{"task_id": taskId})
+	result, err := c.searchService.ProcessSearch(&requestData)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status": "Error",
+			"error":  "Failed to process search request",
+		})
+	}
+
+	return ctx.JSON(result)
 }
 
 func (c *SearchController) GetResultHandler(ctx fiber.Ctx) error {
 	taskID := ctx.Params("taskID")
-	resultJSON, err := c.rq.GetResponseFromQueue(taskID)
+	result, err := c.searchService.GetResult(taskID)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status": "Error",
-			"error":  "Internal server error",
+			"error":  "Failed to get search result",
 		})
 	}
 
-	// Parse the JSON response
-	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(resultJSON), &response); err != nil {
-		return ctx.Status(500).JSON(fiber.Map{
-			"status": "Error",
-			"error":  "Invalid response format",
-		})
-	}
-
-	status, ok := response["status"].(string)
-	if !ok {
-		return ctx.Status(500).JSON(fiber.Map{
-			"status": "Error",
-			"error":  "Invalid response format",
-		})
-	}
-
-	switch status {
-	case redis.StatusError:
-		return ctx.Status(500).JSON(response)
-	case redis.StatusProcessing:
-		return ctx.Status(202).JSON(response)
-	case redis.StatusSuccess:
-		return ctx.JSON(response)
+	switch result.Status {
+	case dto.StatusError:
+		return ctx.Status(fiber.StatusInternalServerError).JSON(result)
+	case dto.StatusProcessing:
+		return ctx.Status(102).JSON(result)
+	case dto.StatusSuccess:
+		return ctx.JSON(result)
+	case dto.StatusNotFound:
+		return ctx.Status(fiber.StatusNotFound).JSON(result)
+	case dto.StatusWrongTaskID:
+		return ctx.Status(fiber.StatusNotFound).JSON(result)
 	default:
-		return ctx.Status(500).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status": "Error",
 			"error":  "Unknown status",
 		})

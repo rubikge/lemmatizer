@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/rubikge/lemmatizer/internal/dto"
 )
 
 const (
@@ -13,12 +14,12 @@ const (
 	retryDelay = 5 * time.Second
 )
 
-func startNewWorker(rq *RedisQueue, consumer string, process func(string) (string, error)) {
+func (rq *RedisQueue) startNewWorker(consumer string) {
 	for {
 		msgs, err := rq.rdb.XReadGroup(rq.ctx, &redis.XReadGroupArgs{
-			Group:    consumerGroup,
+			Group:    ConsumerGroup,
 			Consumer: consumer,
-			Streams:  []string{streamName, ">"},
+			Streams:  []string{StreamName, ">"},
 			Count:    1,
 			Block:    5 * time.Second,
 		}).Result()
@@ -33,14 +34,14 @@ func startNewWorker(rq *RedisQueue, consumer string, process func(string) (strin
 
 		for _, stream := range msgs {
 			for _, msg := range stream.Messages {
-				taskId := msg.ID
+				taskID := msg.ID
 				data := msg.Values["data"].(string)
 
-				fmt.Printf("Processing task: %s\n", taskId)
+				fmt.Printf("Processing task: %s\n", taskID)
 
 				// Check if task has previous errors
 				var taskError TaskError
-				errorKey := fmt.Sprintf("error:%s", taskId)
+				errorKey := fmt.Sprintf("error:%s", taskID)
 				errorData, err := rq.rdb.Get(rq.ctx, errorKey).Result()
 				if err != nil && err != redis.Nil {
 					taskError = TaskError{
@@ -55,7 +56,12 @@ func startNewWorker(rq *RedisQueue, consumer string, process func(string) (strin
 				}
 
 				// Process the task
-				result, err := process(data)
+				var requestData dto.RequestData
+				if err := json.Unmarshal([]byte(data), &requestData); err != nil {
+					fmt.Printf("Error unmarshaling data: %v\n", err)
+					continue
+				}
+				result, err := rq.queryScorer.GetScore(&requestData)
 
 				if err != nil {
 					taskError.Retries++
@@ -66,48 +72,31 @@ func startNewWorker(rq *RedisQueue, consumer string, process func(string) (strin
 					rq.rdb.Set(rq.ctx, errorKey, string(errorJSON), 24*time.Hour)
 
 					if taskError.Retries >= maxRetries {
-						fmt.Printf("Task %s failed after %d retries: %v\n", taskId, maxRetries, err)
+						fmt.Printf("Task %s failed after %d retries: %v\n", taskID, maxRetries, err)
 
-						// Create error response as raw JSON
-						errorResponse := map[string]interface{}{
-							"status": StatusError,
-							"error":  err.Error(),
+						// Create error result
+						result = &dto.SearchResult{
+							Status: dto.StatusError,
 						}
-						resultJSON, _ := json.Marshal(errorResponse)
 
-						// Store final error state
-						rq.rdb.Set(rq.ctx, taskId, string(resultJSON), 24*time.Hour)
-						rq.rdb.XAck(rq.ctx, streamName, consumerGroup, taskId)
 					} else {
 						// Retry later - don't acknowledge the message
-						fmt.Printf("Task %s failed, will retry (%d/%d): %v\n", taskId, taskError.Retries, maxRetries, err)
+						fmt.Printf("Task %s failed, will retry (%d/%d): %v\n", taskID, taskError.Retries, maxRetries, err)
 						time.Sleep(retryDelay)
 						continue
 					}
-				} else {
-					// Create response structure
-					response := map[string]interface{}{
-						"status": StatusSuccess,
-					}
-
-					// Check if result is valid JSON
-					var resultData interface{}
-					if err := json.Unmarshal([]byte(result), &resultData); err != nil {
-						// If not valid JSON, use as raw string
-						response["data"] = result
-					} else {
-						// If valid JSON, use parsed data
-						response["data"] = resultData
-					}
-
-					// Marshal the final response
-					wrappedResult, _ := json.Marshal(response)
-
-					// Store the result
-					rq.rdb.Set(rq.ctx, taskId, string(wrappedResult), 24*time.Hour)
-					rq.rdb.Del(rq.ctx, errorKey) // Clean up error tracking
-					rq.rdb.XAck(rq.ctx, streamName, consumerGroup, taskId)
 				}
+
+				resultJSON, err := json.Marshal(*result)
+				if err != nil {
+					fmt.Printf("Error marshaling result: %v\n", err)
+					continue
+				}
+
+				// Store the result
+				rq.rdb.Set(rq.ctx, taskID, resultJSON, 24*time.Hour)
+				rq.rdb.Del(rq.ctx, errorKey) // Clean up error tracking
+				rq.rdb.XAck(rq.ctx, StreamName, ConsumerGroup, taskID)
 			}
 		}
 	}

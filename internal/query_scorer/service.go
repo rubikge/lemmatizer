@@ -1,7 +1,6 @@
-package search
+package query_scorer
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,14 +15,14 @@ type searchKeyword struct {
 	Word string `json:"word"`
 }
 
-type SearchService struct {
+type Service struct {
 	Lemmatizer *lemmatizer.LemmatizerService
 }
 
-func NewSearchService() *SearchService {
+func NewService() *Service {
 	r := mystem.NewMystemRepository()
 	ls := lemmatizer.NewLemmatizerService(r)
-	return &SearchService{Lemmatizer: ls}
+	return &Service{Lemmatizer: ls}
 }
 
 func getIndex(searchKeywords *[]dto.SearchKeyword) (bleve.Index, error) {
@@ -54,33 +53,23 @@ func getIndex(searchKeywords *[]dto.SearchKeyword) (bleve.Index, error) {
 	return index, nil
 }
 
-func (s *SearchService) GetScore(request string) (string, error) {
-	var requestData dto.RequestData
-	if err := json.Unmarshal([]byte(request), &requestData); err != nil {
-		return "", err
-	}
-
+func (s *Service) GetScore(requestData *dto.RequestData) (*dto.SearchResult, error) {
 	lemmas, err := s.Lemmatizer.GetLemmas(requestData.Message)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	searchProducts, err := s.Lemmatizer.GetLemmatizedSearchProduct(&requestData.Product)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	result := s.getScore(&lemmas, &searchProducts)
 
-	response, err := json.Marshal(result)
-	if err != nil {
-		return "", err
-	}
-
-	return string(response), nil
+	return &result, nil
 }
 
-func (s *SearchService) getScore(words *[]string, searchProducts *[]dto.SearchProduct) dto.SearchResult {
+func (s *Service) getScore(words *[]string, searchProducts *[]dto.SearchProduct) dto.SearchResult {
 	fmt.Printf(
 		"Goal Total Score - %.2f, Min required words number - %d\n\n",
 		goalTotalScore,
@@ -152,7 +141,7 @@ func (s *SearchService) getScore(words *[]string, searchProducts *[]dto.SearchPr
 			if totalScore >= goalTotalScore && requiredWordsCount >= minRequiredWordsCount {
 				fmt.Printf("Result: positive. Total score - %.2f.\n\n", totalScore)
 				return dto.SearchResult{
-					Found:        true,
+					Status:       dto.StatusSuccess,
 					ProductTitle: searchProduct.ProductTitle,
 					TotalScore:   totalScore,
 				}
@@ -162,6 +151,6 @@ func (s *SearchService) getScore(words *[]string, searchProducts *[]dto.SearchPr
 	}
 
 	return dto.SearchResult{
-		Found: false,
+		Status: dto.StatusNotFound,
 	}
 }

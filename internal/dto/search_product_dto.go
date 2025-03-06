@@ -12,9 +12,3 @@ type SearchKeyword struct {
 	Weight            float64
 	RequiredWordIndex int
 }
-
-type SearchResult struct {
-	Found        bool    `json:"found"`
-	ProductTitle string  `json:"product_title"`
-	TotalScore   float64 `json:"total_score"`
-}

@@ -6,42 +6,44 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/rubikge/lemmatizer/internal/dto"
+	"github.com/rubikge/lemmatizer/internal/query_scorer"
 )
 
-// RedisQueueInterface defines the interface for queue operations
-type RedisQueueInterface interface {
-	AddRequestToQueue(data string) (string, error)
-	GetResponseFromQueue(taskId string) (string, error)
-	StartWorker(workerName string, process func(string) (string, error)) error
-}
-
 type RedisQueue struct {
-	rdb     *redis.Client
-	ctx     context.Context
-	workers map[string]struct{}
+	rdb         *redis.Client
+	ctx         context.Context
+	workers     map[string]struct{}
+	queryScorer *query_scorer.Service
 }
 
-func NewRedisQueue() (*RedisQueue, error) {
+func NewRedisQueue(qs *query_scorer.Service) (*RedisQueue, error) {
 	ctx := context.Background()
 	rdb := redis.NewClient(&redis.Options{
-		Addr: addr,
+		Addr: Addr,
 	})
 
-	err := rdb.XGroupCreateMkStream(ctx, streamName, consumerGroup, "0").Err()
+	err := rdb.XGroupCreateMkStream(ctx, StreamName, ConsumerGroup, "0").Err()
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return nil, fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
 	return &RedisQueue{
-		rdb:     rdb,
-		ctx:     ctx,
-		workers: map[string]struct{}{},
+		rdb:         rdb,
+		ctx:         ctx,
+		workers:     map[string]struct{}{},
+		queryScorer: qs,
 	}, nil
 }
 
-func (rq *RedisQueue) AddRequestToQueue(data string) (string, error) {
-	taskId, err := rq.rdb.XAdd(rq.ctx, &redis.XAddArgs{
-		Stream: streamName,
+func (rq *RedisQueue) AddRequestToQueue(requestData *dto.RequestData) (string, error) {
+	data, err := json.Marshal(requestData)
+	if err != nil {
+		return "", err
+	}
+
+	taskID, err := rq.rdb.XAdd(rq.ctx, &redis.XAddArgs{
+		Stream: StreamName,
 		Values: map[string]interface{}{
 			"data": data,
 		},
@@ -50,56 +52,47 @@ func (rq *RedisQueue) AddRequestToQueue(data string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return taskId, nil
+	return taskID, nil
 }
 
-func (rq *RedisQueue) GetResponseFromQueue(taskId string) (string, error) {
-	// First check if we have a result
-	result, err := rq.rdb.Get(rq.ctx, taskId).Result()
+func (rq *RedisQueue) GetResponseFromQueue(taskID string) (*dto.SearchResult, error) {
+	result, err := rq.rdb.Get(rq.ctx, taskID).Result()
 
 	if err == redis.Nil {
 		// Check if task exists in stream
-		messages, err1 := rq.rdb.XRange(rq.ctx, streamName, taskId, taskId).Result()
-		if err1 != nil || len(messages) == 0 {
-			response := map[string]interface{}{
-				"status": StatusError,
-				"error":  "message not found",
-			}
-			resultJSON, _ := json.Marshal(response)
-			return string(resultJSON), nil
+		messages, err1 := rq.rdb.XRange(rq.ctx, StreamName, taskID, taskID).Result()
+		if err1 != nil {
+			return nil, err
 		}
 
-		// Task exists but still processing
-		response := map[string]interface{}{
-			"status": StatusProcessing,
+		if len(messages) == 0 {
+			return &dto.SearchResult{
+				Status: dto.StatusWrongTaskID,
+				TaskID: taskID,
+			}, nil
 		}
-		resultJSON, _ := json.Marshal(response)
-		return string(resultJSON), nil
+
+		return &dto.SearchResult{
+			Status: dto.StatusProcessing,
+			TaskID: taskID,
+		}, nil
 	}
 
 	if err != nil {
-		response := map[string]interface{}{
-			"status": StatusError,
-			"error":  err.Error(),
-		}
-		resultJSON, _ := json.Marshal(response)
-		return string(resultJSON), nil
+		return nil, err
 	}
 
-	if result == "" {
-		response := map[string]interface{}{
-			"status": StatusError,
-			"error":  "empty result",
-		}
-		resultJSON, _ := json.Marshal(response)
-		return string(resultJSON), nil
+	var searchResult dto.SearchResult
+	err = json.Unmarshal([]byte(result), &searchResult)
+	if err != nil {
+		return nil, err
 	}
+	searchResult.TaskID = taskID
 
-	// Result already contains proper JSON structure from worker
-	return result, nil
+	return &searchResult, nil
 }
 
-func (rq *RedisQueue) StartWorker(workerName string, process func(string) (string, error)) error {
+func (rq *RedisQueue) StartWorker(workerName string) error {
 	if _, isStarted := rq.workers[workerName]; isStarted {
 		return fmt.Errorf("worker %s is already started", workerName)
 	}
@@ -108,7 +101,7 @@ func (rq *RedisQueue) StartWorker(workerName string, process func(string) (strin
 
 	go func() {
 		defer delete(rq.workers, workerName)
-		startNewWorker(rq, workerName, process)
+		rq.startNewWorker(workerName)
 	}()
 
 	return nil
